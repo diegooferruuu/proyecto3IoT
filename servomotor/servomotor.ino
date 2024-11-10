@@ -91,6 +91,7 @@ private:
     bool increasing;
     unsigned long lastMove;
     bool isMoving;
+    int lastServoState;
 
 public:
     ServoMotor(int pin) : servoPin(pin), currentAngle(0), servoSpeed(50), increasing(true), lastMove(0), isMoving(false) {}
@@ -111,6 +112,29 @@ public:
             Serial.println(servoSpeed);
         } else {
             Serial.println("Invalid speed value. Use 0 to stop, or 1-100 for speed.");
+        }
+    }
+
+    void updateFromState(int servoState) {
+        if (servoState != lastServoState) {
+            lastServoState = servoState;
+            switch (servoState) {
+                case 0:
+                    setSpeed(0);  // Detiene el servo
+                    break;
+                case 1:
+                    setSpeed(20); // Velocidad baja
+                    break;
+                case 2:
+                    setSpeed(60); // Velocidad media
+                    break;
+                case 3:
+                    setSpeed(95); // Velocidad alta
+                    break;
+                default:
+                    Serial.println("Unknown servoState");
+                    break;
+            }
         }
     }
 
@@ -191,8 +215,17 @@ private:
     }
 
     void callback(char* topic, byte* payload, unsigned int length) {
+        // Creamos un buffer temporal para asegurarnos que el mensaje termine en null
+        char jsonBuffer[512];
+        if (length >= sizeof(jsonBuffer)) {
+            Serial.println("Payload too large");
+            return;
+        }
+        memcpy(jsonBuffer, payload, length);
+        jsonBuffer[length] = '\0';
+
         StaticJsonDocument<512> doc;
-        DeserializationError error = deserializeJson(doc, payload, length);
+        DeserializationError error = deserializeJson(doc, jsonBuffer);
 
         if (error) {
             Serial.print("deserializeJson() failed: ");
@@ -200,26 +233,16 @@ private:
             return;
         }
 
-        int servoState = doc["state"]["desired"]["servoState"];
-        Serial.print("Desired servoState: ");
-        Serial.println(servoState);
-
-        switch (servoState) {
-            case 0:
-                servoMotor.setSpeed(0);  // Detiene el servo
-                break;
-            case 1:
-                servoMotor.setSpeed(20); // Velocidad baja
-                break;
-            case 2:
-                servoMotor.setSpeed(60); // Velocidad media
-                break;
-            case 3:
-                servoMotor.setSpeed(95); // Velocidad alta
-                break;
-            default:
-                Serial.println("Unknown servoState");
-                break;
+        // Verificamos específicamente la existencia del campo servoState
+        JsonObject state = doc["state"];
+        if (!state.isNull()) {
+            JsonObject desired = state["desired"];
+            if (!desired.isNull() && desired.containsKey("servoState")) {
+                int servoState = desired["servoState"];
+                Serial.print("Received servoState: ");
+                Serial.println(servoState);
+                servoMotor.updateFromState(servoState);
+            }
         }
     }
 

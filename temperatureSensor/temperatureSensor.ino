@@ -54,6 +54,10 @@ public:
     int getCurrentState() {
         return currentState;
     }
+
+    void setState(int state) {
+      currentState = state;
+    }
 };
 
 class Communicator {
@@ -91,8 +95,7 @@ public:
     void publishTemperatureState(int tempState) {
         StaticJsonDocument<200> doc;
         doc["state"]["desired"]["tempState"] = tempState;
-        doc["state"]["desired"]["servoState"] = tempState;  
-        doc["state"]["desired"]["auto"] = autoMode ? 1 : 0;
+        doc["state"]["desired"]["servoState"] = tempState;
 
         char buffer[256];
         serializeJson(doc, buffer);
