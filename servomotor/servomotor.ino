@@ -154,8 +154,8 @@ public:
             }
 
             servo.write(currentAngle);
-            Serial.print("Current angle: ");
-            Serial.println(currentAngle);
+            // Serial.print("Current angle: ");
+            // Serial.println(currentAngle);
         }
     }
 };
@@ -215,36 +215,47 @@ private:
     }
 
     void callback(char* topic, byte* payload, unsigned int length) {
-        // Creamos un buffer temporal para asegurarnos que el mensaje termine en null
-        char jsonBuffer[512];
-        if (length >= sizeof(jsonBuffer)) {
-            Serial.println("Payload too large");
-            return;
-        }
-        memcpy(jsonBuffer, payload, length);
-        jsonBuffer[length] = '\0';
+    char jsonBuffer[512];
+    if (length >= sizeof(jsonBuffer)) {
+        Serial.println("Payload too large");
+        return;
+    }
+    memcpy(jsonBuffer, payload, length);
+    jsonBuffer[length] = '\0';
 
-        StaticJsonDocument<512> doc;
-        DeserializationError error = deserializeJson(doc, jsonBuffer);
+    Serial.print("Received payload: ");
+    Serial.println(jsonBuffer);  // Imprime el JSON completo recibido
 
-        if (error) {
-            Serial.print("deserializeJson() failed: ");
-            Serial.println(error.f_str());
-            return;
-        }
+    StaticJsonDocument<512> doc;
+    DeserializationError error = deserializeJson(doc, jsonBuffer);
 
-        // Verificamos específicamente la existencia del campo servoState
-        JsonObject state = doc["state"];
-        if (!state.isNull()) {
-            JsonObject desired = state["desired"];
-            if (!desired.isNull() && desired.containsKey("servoState")) {
+    if (error) {
+        Serial.print("deserializeJson() failed: ");
+        Serial.println(error.f_str());
+        return;
+    }
+
+    JsonObject state = doc["state"];
+    if (!state.isNull()) {
+        Serial.println("Found state object");
+        JsonObject desired = state["desired"];
+        if (!desired.isNull()) {
+            Serial.println("Found desired object");
+            if (desired.containsKey("servoState")) {
                 int servoState = desired["servoState"];
-                Serial.print("Received servoState: ");
+                Serial.print("Found servoState: ");
                 Serial.println(servoState);
                 servoMotor.updateFromState(servoState);
+            } else {
+                Serial.println("servoState not found in desired");
             }
+        } else {
+            Serial.println("desired object is null");
         }
+    } else {
+        Serial.println("state object is null");
     }
+}
 
     void reconnect() {
         while (!client.connected()) {

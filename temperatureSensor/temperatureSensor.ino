@@ -93,9 +93,14 @@ public:
     }
 
     void publishTemperatureState(int tempState) {
+
+        if (!autoMode) {
+            Serial.println("Auto mode disabled. Skipping publication.");
+            return;  
+        }
         StaticJsonDocument<200> doc;
         doc["state"]["desired"]["tempState"] = tempState;
-        doc["state"]["desired"]["servoState"] = tempState;
+        doc["state"]["desired"]["servoState"] = tempState;  
 
         char buffer[256];
         serializeJson(doc, buffer);
@@ -109,6 +114,8 @@ public:
 
     void setAutoMode(bool autoEnabled) {
         autoMode = autoEnabled;
+        Serial.print("Auto mode set to: ");
+        Serial.println(autoEnabled ? "ON" : "OFF");
     }
 
     bool isAutoMode() const {
@@ -142,7 +149,7 @@ private:
             clientId += String(random(0xffff), HEX);
             if (client.connect(clientId.c_str())) {
                 Serial.println("connected");
-                client.subscribe("$aws/things/tempEsp32/shadow/update/delta");
+                client.subscribe("$aws/things/tempEsp32/shadow/update/accepted");
             } else {
                 Serial.print("failed, rc=");
                 Serial.print(client.state());
@@ -156,9 +163,17 @@ private:
         StaticJsonDocument<200> doc;
         deserializeJson(doc, payload, length);
 
-        if (doc["state"]["auto"]) {
+        // Verificar si es un mensaje del topic accepted
+        if (String(topic) == "$aws/things/tempEsp32/shadow/update/accepted") {
+            if (doc["state"]["desired"].containsKey("auto")) {
+                bool newAutoMode = doc["state"]["desired"]["auto"] == 1;
+                setAutoMode(newAutoMode);
+            }
+        }
+        // Mantener el manejo de mensajes delta existente
+        else if (doc["state"].containsKey("auto")) {
             setAutoMode(doc["state"]["auto"] == 1);
-            Serial.println("Auto mode updated from shadow.");
+            Serial.println("Auto mode updated from shadow delta.");
         }
     }
 
