@@ -111,7 +111,7 @@ public:
     }
 
     void publishTemperatureState(int tempState) {
-        lastKnownState = tempState;  // Actualizamos el estado interno
+        lastKnownState = tempState; 
         
         if (!autoMode) {
             Serial.println("Auto mode disabled. Skipping publication.");
@@ -138,12 +138,9 @@ public:
         Serial.println(autoEnabled ? "ON" : "OFF");
 
         if (!autoEnabled) {
-            // Cuando se desactiva el modo auto, activamos la bandera
             needsForcePublish = true;
             Serial.println("Force publish flag activated");
         } else if (needsForcePublish) {
-            // Si el modo auto se activa y la bandera está activa,
-            // forzamos una publicación del último estado conocido
             publishForce();
             needsForcePublish = false;
             Serial.println("Force publish flag reset");
@@ -195,21 +192,18 @@ private:
         StaticJsonDocument<200> doc;
         deserializeJson(doc, payload, length);
 
-        // Verificar si es un mensaje del topic accepted
         if (String(topic) == "$aws/things/tempEsp32/shadow/update/accepted") {
             if (doc["state"]["desired"].containsKey("auto")) {
                 bool newAutoMode = doc["state"]["desired"]["auto"] == 1;
                 setAutoMode(newAutoMode);
             }
         }
-        // Mantener el manejo de mensajes delta existente
         else if (doc["state"].containsKey("auto")) {
             setAutoMode(doc["state"]["auto"] == 1);
             Serial.println("Auto mode updated from shadow delta.");
         }
     }
 
-    // Add your AWS IoT credentials here:
     const char* aws_root_ca_cert = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
