@@ -69,6 +69,8 @@ private:
     PubSubClient client;
     const char* topic;
     bool autoMode;
+    bool needsForcePublish;
+    int lastKnownState;
 
 public:
     Communicator(const char* ssid, const char* password, const char* mqtt_server, const char* topic)
@@ -92,12 +94,30 @@ public:
         client.loop();
     }
 
-    void publishTemperatureState(int tempState) {
+    void publishForce() {
+        Serial.println("Forcing publication of temperature state");
+        StaticJsonDocument<200> doc;
+        doc["state"]["desired"]["tempState"] = lastKnownState;
+        doc["state"]["desired"]["servoState"] = lastKnownState;
 
+        char buffer[256];
+        serializeJson(doc, buffer);
+
+        if (client.publish(topic, buffer)) {
+            Serial.println("Force publish: Shadow updated successfully");
+        } else {
+            Serial.println("Force publish: Error updating shadow");
+        }
+    }
+
+    void publishTemperatureState(int tempState) {
+        lastKnownState = tempState;  // Actualizamos el estado interno
+        
         if (!autoMode) {
             Serial.println("Auto mode disabled. Skipping publication.");
             return;  
         }
+        
         StaticJsonDocument<200> doc;
         doc["state"]["desired"]["tempState"] = tempState;
         doc["state"]["desired"]["servoState"] = tempState;  
@@ -116,6 +136,18 @@ public:
         autoMode = autoEnabled;
         Serial.print("Auto mode set to: ");
         Serial.println(autoEnabled ? "ON" : "OFF");
+
+        if (!autoEnabled) {
+            // Cuando se desactiva el modo auto, activamos la bandera
+            needsForcePublish = true;
+            Serial.println("Force publish flag activated");
+        } else if (needsForcePublish) {
+            // Si el modo auto se activa y la bandera está activa,
+            // forzamos una publicación del último estado conocido
+            publishForce();
+            needsForcePublish = false;
+            Serial.println("Force publish flag reset");
+        }
     }
 
     bool isAutoMode() const {
