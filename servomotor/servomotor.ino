@@ -118,6 +118,7 @@ public:
     void updateFromState(int servoState) {
         if (servoState != lastServoState) {
             lastServoState = servoState;
+            // publicar estado en el reported
             switch (servoState) {
                 case 0:
                     setSpeed(0);  // Detiene el servo
@@ -224,7 +225,7 @@ private:
     jsonBuffer[length] = '\0';
 
     Serial.print("Received payload: ");
-    Serial.println(jsonBuffer);  // Imprime el JSON completo recibido
+    Serial.println(jsonBuffer); 
 
     StaticJsonDocument<512> doc;
     DeserializationError error = deserializeJson(doc, jsonBuffer);

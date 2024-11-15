@@ -97,8 +97,9 @@ public:
     void publishForce() {
         Serial.println("Forcing publication of temperature state");
         StaticJsonDocument<200> doc;
-        doc["state"]["desired"]["tempState"] = lastKnownState;
-        doc["state"]["desired"]["servoState"] = lastKnownState;
+        doc["state"]["reported"]["tempState"] = lastKnownState;
+        doc["state"]["reported"]["auto"] = autoMode ? 1 : 0;
+        // doc["state"]["desired"]["servoState"] = lastKnownState;
 
         char buffer[256];
         serializeJson(doc, buffer);
@@ -113,14 +114,10 @@ public:
     void publishTemperatureState(int tempState) {
         lastKnownState = tempState; 
         
-        if (!autoMode) {
-            Serial.println("Auto mode disabled. Skipping publication.");
-            return;  
-        }
-        
         StaticJsonDocument<200> doc;
-        doc["state"]["desired"]["tempState"] = tempState;
-        doc["state"]["desired"]["servoState"] = tempState;  
+        doc["state"]["reported"]["tempState"] = tempState;
+        doc["state"]["reported"]["auto"] = autoMode ? 1 : 0;
+        // doc["state"]["desired"]["servoState"] = tempState;  
 
         char buffer[256];
         serializeJson(doc, buffer);
@@ -294,7 +291,7 @@ void loop() {
     comm.loop();
 
     float temperature = temperatureSensor.readTemperature();
-    if (comm.isAutoMode() && temperatureSensor.updateState(temperature)) {
+    if (temperatureSensor.updateState(temperature)) { //comm.isAutoMode() && 
         comm.publishTemperatureState(temperatureSensor.getCurrentState());
     }
 
