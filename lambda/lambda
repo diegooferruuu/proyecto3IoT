@@ -1,0 +1,242 @@
+const Alexa = require('ask-sdk-core');
+const AWS = require('aws-sdk');
+const IotData = new AWS.IotData({ endpoint: 'a1o8cg6i3hlsiy-ats.iot.us-east-2.amazonaws.com' });
+
+// Shadow Parameters for updating states
+const ShadowParams = {
+    thingName: 'tempEsp32',
+};
+
+// Function to get the current state of the Shadow
+function getShadowPromise(params) {
+    return new Promise((resolve, reject) => {
+        IotData.getThingShadow(params, (err, data) => {
+            if (err) {
+                console.log(err, err.stack);
+                reject('Error al obtener el shadow: ' + err.message);
+            } else {
+                resolve(JSON.parse(data.payload));
+            }
+        });
+    });
+}
+
+// Function to update the desired state of the Shadow
+function updateShadowPromise(params) {
+    return new Promise((resolve, reject) => {
+        IotData.updateThingShadow(params, (err, data) => {
+            if (err) {
+                console.log(err, err.stack);
+                reject('Error al actualizar el shadow: ' + err.message);
+            } else {
+                resolve(data);
+            }
+        });
+    });
+}
+
+const LaunchRequestHandler = {
+  canHandle(handlerInput) {
+      return Alexa.getRequestType(handlerInput.requestEnvelope) === 'LaunchRequest';
+  },
+  handle(handlerInput) {
+      const speakOutput = 'Bienvenido al sistema de ventilación inteligente. Puedes preguntar por el estado de temperatura o cambiar la velocidad del ventilador. ¿Qué deseas hacer?';
+      return handlerInput.responseBuilder.speak(speakOutput).reprompt(speakOutput).getResponse();
+  }
+};
+
+// Handler para consultar el estado de la temperatura
+const CheckTemperatureStateHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'CheckTemperatureStateIntent';
+    },
+    async handle(handlerInput) {
+        let speakOutput = 'No se pudo obtener el estado de la temperatura.';
+        try {
+            const result = await getShadowPromise(ShadowParams);
+            const tempState = result.state.reported.tempState;
+
+            switch (tempState) {
+                case 0:
+                    speakOutput = 'La temperatura está en estado ideal.';
+                    break;
+                case 1:
+                    speakOutput = 'La temperatura está poco caliente.';
+                    break;
+                case 2:
+                    speakOutput = 'La temperatura está caliente.';
+                    break;
+                case 3:
+                    speakOutput = 'La temperatura está muy caliente.';
+                    break;
+                default:
+                    speakOutput = 'No se pudo determinar el estado de la temperatura.';
+            }
+        } catch (error) {
+            console.log(error);
+        }
+
+        return handlerInput.responseBuilder
+            .speak(speakOutput)
+            .reprompt(speakOutput)
+            .getResponse();
+    }
+};
+
+// Handler para consultar el estado del servomotor
+const CheckServoStateHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'CheckServoStateIntent';
+    },
+    async handle(handlerInput) {
+        let speakOutput = 'No se pudo obtener el estado del servomotor.';
+        try {
+            const result = await getShadowPromise(ShadowParams);
+            const servoState = result.state.desired.servoState;
+
+            speakOutput = `El servomotor está en el estado ${servoState}.`;
+        } catch (error) {
+            console.log(error);
+        }
+
+        return handlerInput.responseBuilder
+            .speak(speakOutput)
+            .reprompt(speakOutput)
+            .getResponse();
+    }
+};
+
+// Handler para cambiar el modo a automático
+const ChangeAutoModeHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'ChangeAutoModeIntent';
+    },
+    async handle(handlerInput) {
+        const payload = {
+            state: {
+                desired: {
+                    auto: 1  // Configura el modo automático a 1 (automático)
+                }
+            }
+        };
+
+        const params = {
+            ...ShadowParams,
+            payload: JSON.stringify(payload)
+        };
+
+        try {
+            await updateShadowPromise(params);
+            const speakOutput = 'El modo automático se ha activado.';
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+        } catch (error) {
+            console.log(error);
+            return handlerInput.responseBuilder
+                .speak('Hubo un error al activar el modo automático.')
+                .getResponse();
+        }
+    }
+};
+
+// Handler para cambiar el estado del servomotor en modo manual
+const ChangeServoStateManualHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'ChangeServoStateManualIntent';
+    },
+    async handle(handlerInput) {
+        // Obtener el valor del slot 'servoSpeed' de la solicitud
+        const servoSpeed = handlerInput.requestEnvelope.request.intent.slots.servoSpeed.value;
+
+        const payload = {
+            state: {
+                desired: {
+                    servoState: parseInt(servoSpeed),  // Asigna el valor del slot como estado del servo
+                    auto: 0  // Configura el modo automático a 0 (manual)
+                }
+            }
+        };
+
+        const params = {
+            ...ShadowParams,
+            payload: JSON.stringify(payload)
+        };
+
+        try {
+            await updateShadowPromise(params);
+            const speakOutput = `El servomotor se ha ajustado a la velocidad ${servoSpeed} y se ha cambiado a modo manual.`;
+            return handlerInput.responseBuilder
+                .speak(speakOutput)
+                .reprompt(speakOutput)
+                .getResponse();
+        } catch (error) {
+            console.log(error);
+            return handlerInput.responseBuilder
+                .speak('Hubo un error al cambiar el estado del servomotor.')
+                .getResponse();
+        }
+    }
+};
+
+// Otros handlers estándar
+const HelpIntentHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && Alexa.getIntentName(handlerInput.requestEnvelope) === 'AMAZON.HelpIntent';
+    },
+    handle(handlerInput) {
+        const speakOutput = 'Puedes pedirme consultar o cambiar el estado de la temperatura y el servomotor. ¿Qué deseas hacer?';
+
+        return handlerInput.responseBuilder
+            .speak(speakOutput)
+            .reprompt(speakOutput)
+            .getResponse();
+    }
+};
+
+const CancelAndStopIntentHandler = {
+    canHandle(handlerInput) {
+        return Alexa.getRequestType(handlerInput.requestEnvelope) === 'IntentRequest'
+            && (Alexa.getIntentName(handlerInput.requestEnvelope) === 'AMAZON.CancelIntent'
+                || Alexa.getIntentName(handlerInput.requestEnvelope) === 'AMAZON.StopIntent');
+    },
+    handle(handlerInput) {
+        const speakOutput = '¡Hasta luego!';
+
+        return handlerInput.responseBuilder
+            .speak(speakOutput)
+            .getResponse();
+    }
+};
+
+const ErrorHandler = {
+    canHandle() {
+        return true;
+    },
+    handle(handlerInput, error) {
+        console.log(`Error: ${error.message}`);
+        return handlerInput.responseBuilder
+            .speak('Hubo un problema. Intenta de nuevo.')
+            .getResponse();
+    }
+};
+
+// Exporta la skill con todos los handlers
+exports.handler = Alexa.SkillBuilders.custom()
+    .addRequestHandlers(
+        LaunchRequestHandler,
+        CheckTemperatureStateHandler,
+        CheckServoStateHandler,
+        ChangeAutoModeHandler,
+        ChangeServoStateManualHandler,
+        HelpIntentHandler,
+        CancelAndStopIntentHandler
+    )
+    .addErrorHandlers(ErrorHandler)
+    .lambda();
