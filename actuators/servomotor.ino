@@ -81,7 +81,6 @@ vGVyVks3EAok++uVaVn0FZqOy3VbXtvRamL3Y8pjEy3tA+gGILHuiMYMyGZnkFgv
 -----END RSA PRIVATE KEY-----
 )EOF";
 
-// Clase para controlar el servo
 class ServoMotor {
 private:
     Servo servo;
@@ -92,14 +91,19 @@ private:
     unsigned long lastMove;
     bool isMoving;
     int lastServoState;
+    // Communicator* communicator;
 
 public:
-    ServoMotor(int pin) : servoPin(pin), currentAngle(0), servoSpeed(50), increasing(true), lastMove(0), isMoving(false) {}
+    ServoMotor(int pin) : servoPin(pin), currentAngle(0), servoSpeed(50), increasing(true), lastMove(0), isMoving(false) {} //, communicator(nullptr)
 
     void setup() {
         servo.attach(servoPin);
         servo.write(currentAngle);
     }
+
+    // void attachCommunicator(Communicator* comm) {
+    //     communicator = comm;
+    // }
 
     void setSpeed(int speed) {
         if (speed == 0) {
@@ -118,24 +122,17 @@ public:
     void updateFromState(int servoState) {
         if (servoState != lastServoState) {
             lastServoState = servoState;
-            // publicar estado en el reported
             switch (servoState) {
-                case 0:
-                    setSpeed(0);  // Detiene el servo
-                    break;
-                case 1:
-                    setSpeed(20); // Velocidad baja
-                    break;
-                case 2:
-                    setSpeed(60); // Velocidad media
-                    break;
-                case 3:
-                    setSpeed(95); // Velocidad alta
-                    break;
-                default:
-                    Serial.println("Unknown servoState");
-                    break;
+                case 0: setSpeed(0); break;
+                case 1: setSpeed(20); break;
+                case 2: setSpeed(60); break;
+                case 3: setSpeed(95); break;
+                default: Serial.println("Unknown servoState"); break;
             }
+
+            // if (communicator) {
+            //     communicator->publishReportedState(servoState);
+            // }
         }
     }
 
@@ -161,7 +158,6 @@ public:
     }
 };
 
-// Clase para manejar la conexión a AWS IoT y los mensajes MQTT
 class Communicator {
 private:
     const char* ssid;
@@ -214,6 +210,22 @@ private:
         client.setServer(mqtt_server, 8883);
         client.setCallback([this](char* topic, byte* payload, unsigned int length) { this->callback(topic, payload, length); });
     }
+
+    void publishReportedState(int servoState) {
+    StaticJsonDocument<512> doc;
+    JsonObject state = doc.createNestedObject("state");
+    JsonObject reported = state.createNestedObject("reported");
+    reported["servoState"] = servoState;
+
+    char buffer[512];
+    size_t n = serializeJson(doc, buffer);
+    if (client.publish("$aws/things/tempEsp32/shadow/update", buffer, n)) {
+        Serial.println("Reported state published successfully:");
+        Serial.println(buffer);
+    } else {
+        Serial.println("Failed to publish reported state");
+    }
+}
 
     void callback(char* topic, byte* payload, unsigned int length) {
     char jsonBuffer[512];
@@ -278,12 +290,13 @@ private:
 };
 
 ServoMotor servo(16);
-Communicator communicator("FERRUVEGA", "Ignacio73*-", "a1o8cg6i3hlsiy-ats.iot.us-east-2.amazonaws.com", "$aws/things/tempEsp32/shadow/update/accepted", servo);
+Communicator communicator("Galaxy A20s3847", "camilo2003", "a1o8cg6i3hlsiy-ats.iot.us-east-2.amazonaws.com", "$aws/things/tempEsp32/shadow/update/accepted", servo);
 
 void setup() {
     Serial.begin(115200);
     servo.setup();
     communicator.setup();
+    // servo.attachCommunicator(&communicator);
 }
 
 void loop() {

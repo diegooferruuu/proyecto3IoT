@@ -97,9 +97,8 @@ public:
     void publishForce() {
         Serial.println("Forcing publication of temperature state");
         StaticJsonDocument<200> doc;
-        doc["state"]["reported"]["tempState"] = lastKnownState;
-        doc["state"]["reported"]["auto"] = autoMode ? 1 : 0;
-        // doc["state"]["desired"]["servoState"] = lastKnownState;
+        doc["state"]["reported"]["temperatureState"] = lastKnownState;
+        doc["state"]["reported"]["incubatorMode"] = autoMode ? 1 : 0;
 
         char buffer[256];
         serializeJson(doc, buffer);
@@ -115,9 +114,8 @@ public:
         lastKnownState = tempState; 
         
         StaticJsonDocument<200> doc;
-        doc["state"]["reported"]["tempState"] = tempState;
-        doc["state"]["reported"]["auto"] = autoMode ? 1 : 0;
-        // doc["state"]["desired"]["servoState"] = tempState;  
+        doc["state"]["reported"]["temperatureState"] = tempState;
+        doc["state"]["reported"]["incubatorMode"] = autoMode ? 1 : 0; 
 
         char buffer[256];
         serializeJson(doc, buffer);
@@ -191,12 +189,12 @@ private:
 
         if (String(topic) == "$aws/things/tempEsp32/shadow/update/accepted") {
             if (doc["state"]["desired"].containsKey("auto")) {
-                bool newAutoMode = doc["state"]["desired"]["auto"] == 1;
+                bool newAutoMode = doc["state"]["desired"]["incubatorMode"] == 1;
                 setAutoMode(newAutoMode);
             }
         }
-        else if (doc["state"].containsKey("auto")) {
-            setAutoMode(doc["state"]["auto"] == 1);
+        else if (doc["state"].containsKey("incubatorMode")) {
+            setAutoMode(doc["state"]["incubatorMode"] == 1);
             Serial.println("Auto mode updated from shadow delta.");
         }
     }
@@ -279,7 +277,7 @@ vGVyVks3EAok++uVaVn0FZqOy3VbXtvRamL3Y8pjEy3tA+gGILHuiMYMyGZnkFgv
 };
 
 TemperatureSensor temperatureSensor(4);
-Communicator comm("FERRUVEGA", "Ignacio73*-", "a1o8cg6i3hlsiy-ats.iot.us-east-2.amazonaws.com", "$aws/things/tempEsp32/shadow/update");
+Communicator comm("Galaxy A20s3847", "camilo2003", "a1o8cg6i3hlsiy-ats.iot.us-east-2.amazonaws.com", "$aws/things/tempEsp32/shadow/update");
 
 void setup() {
     Serial.begin(115200);
@@ -291,7 +289,7 @@ void loop() {
     comm.loop();
 
     float temperature = temperatureSensor.readTemperature();
-    if (temperatureSensor.updateState(temperature)) { //comm.isAutoMode() && 
+    if (temperatureSensor.updateState(temperature)) {
         comm.publishTemperatureState(temperatureSensor.getCurrentState());
     }
 
